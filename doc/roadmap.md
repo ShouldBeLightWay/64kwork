@@ -4,7 +4,7 @@
 
 - [x] CMake + NASM, freestanding build (`-ffreestanding`, `-nostdlib`), and a custom `_start`.
 - [x] Xlib window + OpenGL 4.1 core context (`glXCreateContextAttribsARB`), frame loop, and clean shutdown.
-- [x] Intro-style ELF layout (`link.ld`, one `PT_LOAD` without inter-segment page padding), stripping, and removal of unused metadata (`.comment`, `.eh_frame`, symbol table). MinSizeRel size: 5,568 bytes.
+- [x] Intro-style ELF layout (`link.ld`, one `PT_LOAD` without inter-segment page padding), stripping, and removal of unused metadata (`.comment`, `.eh_frame`, symbol table). GNU ld MinSizeRel size: 5,568 bytes.
 - [x] Project documentation and `AGENTS.md` with implementation rules and pitfalls.
 
 Phase metric: reduced the baseline from 15,088 to 5,568 bytes without losing functionality.

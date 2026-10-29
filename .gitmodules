@@ -1,0 +1,3 @@
+[submodule "tools/smol"]
+	path = tools/smol
+	url = https://github.com/PoroCYon/smol.git

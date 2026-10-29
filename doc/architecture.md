@@ -50,7 +50,7 @@ There are 25 imported symbols from X11/GLX/GL; the executable has no direct libc
 
 ## Size and Packer
 
-Measure the unpacked MinSizeRel executable with `stat -c%s build-minsz/intro`. Before packing, focus on ELF sections, strings, and dynamic-linking tables. Packing with UPX or a custom ELF packer is a separate roadmap phase; the current single-`PT_LOAD` layout may be useful for a custom packer.
+The project provides three build variants: `gnu_ld_script` (GNU ld with the custom `link.ld`), `std_upx` (standard GNU ELF followed by UPX), and `smol` (custom ELF/runtime resolver). Compare their MinSizeRel outputs with `stat -c%s`; the UPX output is `std_upx.upx`, while `smol` writes `smol/intro.smol`. These formats have different loader and debugging trade-offs; see the repository README for build commands.
 
 ## Tests
 
