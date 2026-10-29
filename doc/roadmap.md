@@ -1,73 +1,53 @@
-# Дорожная карта 64kwork
+# 64kwork Roadmap
 
-## Фаза 0 — скелет и база (готово)
+## Phase 0: Skeleton and Baseline (Complete)
 
-- [x] CMake + NASM, freestanding (`-ffreestanding`, `-nostdlib`), свой `_start`.
-- [x] Окно Xlib + OpenGL 4.1 core (`glXCreateContextAttribsARB`), кадр-цикл, корректный выход.
-- [x] Интро-раскладка ELF (`link.ld`, один PT_LOAD без паддинга), стрипт, отсутствие
-      мусора (.comment/.eh_frame/symtab). MinSizeRel: 5568 Б.
-- [x] Документация (эта), AGENTS.md с правилами и ловушками.
+- [x] CMake + NASM, freestanding build (`-ffreestanding`, `-nostdlib`), and a custom `_start`.
+- [x] Xlib window + OpenGL 4.1 core context (`glXCreateContextAttribsARB`), frame loop, and clean shutdown.
+- [x] Intro-style ELF layout (`link.ld`, one `PT_LOAD` without inter-segment page padding), stripping, and removal of unused metadata (`.comment`, `.eh_frame`, symbol table). MinSizeRel size: 5,568 bytes.
+- [x] Project documentation and `AGENTS.md` with implementation rules and pitfalls.
 
-Метрика фазы: 15088 → 5568 байт без потери функциональности.
+Phase metric: reduced the baseline from 15,088 to 5,568 bytes without losing functionality.
 
-## Фаза 1 — minicrt (наша замена libc)
+## Phase 1: minicrt (Our Minimal Runtime)
 
-Формат артефакта (STATIC или OBJECT-библиотека) выбирается по результатам тестов и
-замерам — объектная библиотека без архивной обвязки обычно меньше на линковке.
+Choose between a STATIC library and an OBJECT library based on tests and size measurements. An object library may avoid archive overhead during linking.
 
-- [ ] Syscall-обёртки вынести из `intro_main.c` в `src/c/minicrt/`
-      (`sys_write`, `sys_read`, `nanosleep`, `mmap`, ...).
-- [ ] Свои строковые функции (strlen/memcpy/memset — минимальные, свои имена),
-      свой маленький alloc (или вообще arena из mmap/brk — сценарий intro его диктует).
-- [ ] Свой форматтер (числа → строка) для отладочного вывода; позже отказ от всего
-      debug-вывода в релизе как экономия `.rodata`.
-- [ ] Исследование: замена динамических импортов (X11/GL через ld.so) на
-      собственный dlsym-резолвер по `link_map`/DT_таблицам — цель: независимость
-      от ld.so и экономия PLT/rela (~1.2 КБ) либо наоборот — оставить ld.so.
-      Решение только по замерам (нужен тест-стенд: одинаковая сцена в обоих вариантах).
-- [ ] Тесты: минимальный test-runner без libc (свой main, exit code = код теста),
-      проверка под `Xvfb` (опционально, `xorg-server-xvfb`).
+- [ ] Move syscall wrappers from `intro_main.c` into `src/c/minicrt/` (`sys_write`, `sys_read`, `nanosleep`, `mmap`, etc.).
+- [ ] Add minimal project-named string/memory functions (`strlen`, `memcpy`, `memset`) and a small allocator, or use an `mmap`/`brk` arena if the intro's needs favor it.
+- [ ] Add a small number-to-string formatter for debug output; later remove debug output from release builds to save `.rodata` space.
+- [ ] Compare dynamic X11/GL imports through `ld.so` with a custom resolver using `link_map`/`DT_*` tables. Measure whether avoiding `ld.so` or reducing PLT/relocation overhead (estimated at about 1.2 KiB) is worthwhile; retain the dynamic loader otherwise. Use the same scene in both variants.
+- [ ] Add a minimal test runner without libc (custom `main`, exit code equals test result) and test under Xvfb when available (`xorg-server-xvfb`).
 
-Критерий приёмки: тот же рантайм-функционал, размер не больше текущей базы;
-выбор STATIC/OBJECT задокументирован замерами в doc/minicrt.md.
+Acceptance criterion: preserve current runtime functionality without exceeding the current baseline size. Document STATIC vs OBJECT measurements in `doc/minicrt.md`.
 
-## Фаза 2 — engine (OpenGL-движок)
+## Phase 2: Engine (OpenGL Engine)
 
-Отдельная документация: `doc/engine.md` (пишется на старте фазы).
-Главное: **процедурная генерация** — минимальные seed/параметры вместо данных.
+Create separate documentation in `doc/engine.md` when this phase starts. The central goal is **procedural generation**: store minimal seeds and parameters instead of large assets.
 
-- [ ] Шейдерный пайплайн GL 4.1 core (VAO/VBO по минимуму, компиляция шейдеров из
-      встроенных строк, свой мини-хелпер над glXGetProcAddress для нужных entry points).
-- [ ] Процедурная геометрия/текстуры (шуми, L-systems, SDF — что выберем под сцену).
-- [ ] Таблица «размер функции → байты» (замеры `-ffunction-sections` + выключением).
-- [ ] Формат сцены/тайминг-линии (minidsl или бинарный, решается с editor).
-- [ ] Audio (опционально): свой мини-синтезатор, вывод через `/dev/dsp`-заглушку
-      или ALSA-PWM — объём решения отложить до engine.md.
+- [ ] Build a GL 4.1 core shader pipeline (minimal VAO/VBO use, shaders embedded as strings, and a small helper around `glXGetProcAddress` for required entry points).
+- [ ] Explore procedural geometry and textures (noise, L-systems, SDFs, or techniques selected for the scene).
+- [ ] Track function-size measurements by comparing builds with `-ffunction-sections` and selectively disabled functions.
+- [ ] Define the scene and timeline format (a small DSL or binary format), in coordination with the editor.
+- [ ] Evaluate audio as an optional feature. Choose the synthesizer and output backend based on the engine's requirements; defer the design until `engine.md`.
 
-## Фаза 3 — editor (редактор сцены)
+## Phase 3: Editor (Scene Editor)
 
-Отдельный бинарник, НЕ входит в состав интро-шута (к нему не применяются
-правила 64k, но он должен быть кросс-платформенно-собираемым на Linux).
+The editor is a separate executable and is not part of the intro's 64 KiB budget. It is currently intended to build on Linux.
 
-- [ ] UI на Nuklear (header-only, без зависимостей — хорошо ложится на наши правила).
-- [ ] Тот же OpenGL-путь рендера, что и в engine (общий код: `src/engine/` линкуется
-      и в intro, и в editor; editor добавляет только UI + tools).
-- [ ] Инлайны: визуальный timeline параметров процедурной генерации, экспорт в
-      формат сцены фазы 2.
+- [ ] Build the UI with Nuklear (single-header, with no external dependencies).
+- [ ] Reuse the engine's OpenGL rendering path (`src/engine/` should be shared by the intro and editor); the editor adds UI and tools.
+- [ ] Provide a visual timeline for procedural-generation parameters and export to the Phase 2 scene format.
 
-## Фаза 4 — упаковка и релизный цикл
+## Phase 4: Packing and Release Cycle
 
-- [ ] Эксперимент с UPX (пакет `upx`): `upx --best --lzma` — базовая отметка.
-- [ ] Исследование самодельного elf-pack/asm-pack (UPX добавляет свой декодер;
-      свой может быть меньше; формат одного LOAD в link.ld этому помогает).
-- [ ] CI-гейт размера: артефакт сборки проходит `stat`-порог (напр. 65536) как
-      условие успешности.
+- [ ] Benchmark UPX (`upx --best --lzma`) as a baseline.
+- [ ] Investigate a custom ELF/assembly packer. UPX includes a decompressor; a custom one may be smaller. The single-`PT_LOAD` layout may help.
+- [ ] Add a CI size gate that fails when the packed artifact exceeds a configured limit (for example, 65,536 bytes).
 
-## Сквозные правила (для всех фаз)
+## Cross-Phase Rules
 
-1. Перед добавлением фичи — оценка байт; после — `stat`-замер в commit-message.
-2. Библиотеки в интро только динамические (кроме planned minicrt) и только если
-   их нет в теле бинарника (PLT-режим).
-3. Каждая фаза сохраняет зелёным рантайм-тест (окно, GL 4.1, выход по Esc/крестику).
-4. Новые модули — в `src/<mod>/`, подключение через CMake-цели; флаги freestanding
-   наследуются автоматически.
+1. Estimate byte cost before adding a feature and record a `stat` measurement after the change.
+2. Use dynamic libraries in the intro (except for the planned minicrt); their code stays outside the executable, but dynamic symbols, relocations, PLT/GOT entries, and strings still consume space in it.
+3. Keep the runtime smoke test passing for each phase: window creation, GL 4.1 context, and shutdown via Escape or the window close control.
+4. Put new modules under `src/<module>/` and connect them through CMake targets; freestanding flags should be inherited automatically.
