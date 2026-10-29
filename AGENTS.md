@@ -1,80 +1,66 @@
-# AGENTS.md — правила проекта для AI-агентов
+# AGENTS.md: Project Rules for AI Agents
 
-## Что это
+## Project
 
-Фреймворк для создания 64k intro (размер итогового бинарника ≤ 65536 байт со сжатым видом).
-Только Linux (x86-64). Компилятор: GCC/Clang. Ассемблер: NASM (elf64). Сборка: CMake.
+A framework for creating 64 KiB intros. The final packed executable must be no larger than 65,536 bytes. The project currently targets Linux x86-64 and uses GCC or Clang, NASM (ELF64), and CMake.
 
-## Железные правила
+## Non-Negotiable Rules
 
-1. **Никакого libc/CRT в нашем коде.** Компиляция `-ffreestanding`, линковка `-nostdlib`.
-   libc подгружается только как транзитивная зависимость libX11/libGL во время выполнения —
-   это допустимо, но в нашем коде запрещены любые вызовы libc-символов (printf, malloc, strlen, ...).
-   Точка входа — `_start` в `src/asm/entry.asm`, она вызывает
-   `int intro_main(int argv, char *argvc)` и возвращает её результат в `SYS_exit`.
-2. **Размер — метрика №1.** Любое изменение проверяется размером MinSizeRel-бинарника:
-   `stat -c%s build-minsz/intro`. Ожидаемый размер текущей базы: ~5.5 КБ до упаковщика.
-   Перед добавлением кода спрашивай: сколько байт это стоит?
-3. **Заголовки системных библиотек не include-ить** (только `<stddef.h>`). Все типы — свои
-   opaque-определения, все функции — ручные `extern`-прототипы (см. `src/c/intro_main.c`).
-4. **Не трогай `link.ld` без понимания последствий** (см. «Ловушки линковки» ниже).
+1. **Do not use libc or CRT code directly.** Compile with `-ffreestanding` and link with `-nostdlib`. Dynamic dependencies such as libX11 and libGL may load libc transitively at runtime, but project code must not call libc symbols such as `printf`, `malloc`, or `strlen`. The entry point is `_start` in `src/asm/entry.asm`; it calls `int intro_main(int argv, char *argvc)` and exits via `SYS_exit` with the return value.
+2. **Size is the primary metric.** Measure the MinSizeRel executable with `stat -c%s build-minsz/intro`. The current baseline is 5,568 bytes before packing. Estimate the byte cost before adding code, then measure it afterward.
+3. **Do not include system-library headers** (except `<stddef.h>`). Define only the required opaque types and manual `extern` prototypes; see `src/c/intro_main.c`.
+4. **Do not modify `link.ld` without understanding the consequences.** See “Linker Pitfalls” below.
 
-## Сборка и проверка
+## Build and Verification
 
 ```sh
 cmake -S . -B build-minsz -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build build-minsz
-stat -c%s build-minsz/intro                      # размер
-readelf -SW build-minsz/intro                    # секции: нет ли мусора/паддинга
-readelf -lW build-minsz/intro                    # сегменты: один PT_LOAD, offset 0
+stat -c%s build-minsz/intro                      # executable size
+readelf -SW build-minsz/intro                    # sections and padding
+readelf -lW build-minsz/intro                    # program headers and LOAD layout
 ```
 
-Ручная проверка рантайма (нужен X/Wayland-сессия, DISPLAY=:0):
+Manual runtime checks require an X11 display (including XWayland, if applicable) and a valid `DISPLAY`:
 
 ```sh
-./build-minsz/intro &                                    # окно 1024x640, фон анимируется
-xdotool search --name "64kwork intro"                    # id окна
-xdotool windowactivate --sync <id> key Escape            # выход, exit code 0
-xdotool windowclose <id>                                 # тоже выход, exit code 0
+./build-minsz/intro                              # opens a 1024x640 window with an animated background
+xdotool search --name "64kwork intro"            # get the window ID
+xdotool windowactivate --sync <id> key Escape    # exits with code 0
+xdotool windowclose <id>                         # also exits with code 0
 ```
 
-Время жизни процесса в тестах ограничивай явно (`sleep` + `kill` цикл), `wait` без таймаута
-допускает зависание. Ожидаемый exit code: 0.
+Bound process lifetime in automated checks (for example, with `timeout`); do not wait indefinitely. The expected exit code on a normal close is 0.
 
-## Структура
+## Layout
 
+```text
+CMakeLists.txt      freestanding flags, X11/GL linkage, linker script
+link.ld             intro-style ELF layout (see linker pitfalls)
+src/asm/entry.asm   _start -> intro_main -> SYS_exit (rax=60)
+src/c/intro_main.c  Xlib window, GL 4.1 core context, frame loop
+doc/                architecture and roadmap documentation
 ```
-CMakeLists.txt      флаги freestanding, линковка X11+GL, link.ld
-link.ld             intro-раскладка ELF (см. ловушки)
-src/asm/entry.asm   _start → intro_main → SYS_exit (rax=60)
-src/c/intro_main.c  окно Xlib + контекст GL 4.1 core, кадр-цикл
-doc/                документация (architecture, roadmap)
-```
 
-## Ловушки линковки (проверено на GCC 16 / binutils / glibc-ld.so)
+## Linker Pitfalls
 
-- Один PT_LOAD c `p_offset=0` обязан покрывать ELF-заголовки, иначе ld.so крэшится при старте.
-  В `link.ld` начало `. = 0x400000 + SIZEOF_HEADERS`.
-- Уменьшать `max-page-size` (< 4K) нельзя: ядро требует `p_offset ≡ p_vaddr (mod PAGE_SIZE)`,
-  иначе SIGSEGV сразу при exec.
-- Флаги `-N` / `-n` в новых binutils эквивалентны `--static` — не использовать.
-- При `-Wl,-T<script>` линкер не находит транзитивные зависимости libX11/libGL
-  (libc, libxcb, libGLX, libGLdispatch) — обязателен `-Wl,-rpath-link,/usr/lib`.
-- Стрипка: `-Wl,-s` включена для Release и MinSizeRel; без неё symtab/strtab добавляют ~1.4 КБ.
-- Отключены: PIE, stack-protector, unwind-таблицы (`.eh_frame` пуст), `.comment` (`-fno-ident`),
-  CFI (`-fcf-protection=none`, иначе Arch-GCC вставляет `endbr64` в каждую функцию).
+Verified with GCC 16, binutils, and glibc's dynamic loader:
 
-## Ловушки X11 (проверено)
+- The single `PT_LOAD` must have `p_offset=0` and cover the ELF and program headers; otherwise the dynamic loader can fail at startup. `link.ld` starts sections at `0x400000 + SIZEOF_HEADERS`.
+- Do not reduce `max-page-size` below 4 KiB: Linux requires `p_offset` and `p_vaddr` to be congruent modulo the page size, or execution can fail with `SIGSEGV`.
+- Avoid `-N` and `-n`; with the tested binutils they imply static-linking behavior that is incompatible with this dynamic-link setup.
+- With `-Wl,-T<script>`, the linker may not find transitive libX11/libGL dependencies (libc, libxcb, libGLX, libGLdispatch); `-Wl,-rpath-link,/usr/lib` is currently required.
+- `-Wl,-s` is enabled for Release and MinSizeRel. Without stripping, `.symtab` and `.strtab` add about 1.4 KiB.
+- PIE, stack protection, unwind tables, `.comment`, and CFI are disabled to reduce size. In particular, `-fcf-protection=none` avoids `endbr64` in every function with the tested Arch GCC.
 
-- `XCheckWindowEvent` НЕ читает сокет — события не приходят при прямом DRI-рендерере.
-  Использовать только `while (XPending(dpy)) XNextEvent(dpy, ev)`.
-- Выход: `WM_DELETE_WINDOW` (ClientMessage + `WM_PROTOCOLS`), Esc/`q` (KeyPress),
-  а также `UnmapNotify`/`DestroyNotify` (закрытие композитором без WM_DELETE, типично для XWayland).
-- XEvent — union из 24 longs; события принимаются в буфер `long ev[24]` и читаются
-  через ручные структуры (`XAnyEventMin` и т.п.).
-- Свой `syscall`-хелпер через inline asm (`sys_write`, `nanosleep`) — libc нет.
+## X11 Pitfalls
 
-## Согласованность кода
+- Drain events with `while (XPending(dpy)) XNextEvent(dpy, ev)`. `XPending` reads pending events from the connection when its local queue is empty; do not assume the `XCheck*` family is a non-reading queue-only API.
+- Handle `WM_DELETE_WINDOW` (`ClientMessage` with `WM_PROTOCOLS`), Escape/`q` (`KeyPress`), and `UnmapNotify`/`DestroyNotify` when the window manager or compositor closes the window without the delete protocol.
+- `XEvent` is a union sized to 24 longs on the target ABI. Events are received into `long ev[24]` and interpreted through matching manual structures such as `XAnyEventMin`.
+- The project uses inline-assembly syscall helpers for `write` and `nanosleep`; do not add libc calls.
 
-- Имена в стиле нижнего регистра (`intro_main`, `glXMakeCurrent` — чужие как в ABI).
-- Константы — `#define` со значениями ABI/X/GLX, числа из спецификаций, не выдумывать.
-- Комментариев минимум; только там, где нужен контекст ABI/размера.
+## Code Consistency
+
+- Use lowercase names (`intro_main`); preserve external ABI names such as `glXMakeCurrent`.
+- Define ABI, X11, and GLX constants from their specifications; do not invent values.
+- Keep comments sparse and use them only when ABI or size context is needed.

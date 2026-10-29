@@ -53,7 +53,8 @@ typedef unsigned long VisualID;
 typedef unsigned long KeySym;
 
 typedef struct {
-    VisualID visual;
+    void *visual;
+    VisualID visualid;
     int screen;
     int depth;
     int c_class;
@@ -65,21 +66,19 @@ typedef struct {
 typedef struct {
     unsigned long background_pixmap;
     unsigned long background_pixel;
-    void *colormap;
+    unsigned long border_pixmap;
     unsigned long border_pixel;
     int bit_gravity;
     int win_gravity;
     int backing_store;
-    int pad0;
     unsigned long backing_planes;
     unsigned long backing_pixel;
     int save_under;
-    int pad1;
     long event_mask;
     long do_not_propagate_mask;
     int override_redirect;
-    int pad2;
-    void *screen;
+    unsigned long colormap;
+    unsigned long cursor;
 } XSetWindowAttributes;
 
 extern Display *XOpenDisplay(const char *name);
@@ -261,33 +260,31 @@ int intro_main(int argv, char *argvc)
         kputs("glx: no visual for FBConfig\n");
         return 3;
     }
-    VisualID visual_id = vi->visual;
+    void *visual = vi->visual;
     int depth = vi->depth;
     XFree(vi);
 
-    Colormap cmap = XCreateColormap(dpy, root, (void *)visual_id, 0);
+    Colormap cmap = XCreateColormap(dpy, root, visual, 0);
 
     XSetWindowAttributes attrs;
     attrs.background_pixmap = 0;
     attrs.background_pixel = 0;
-    attrs.colormap = (void *)cmap;
+    attrs.border_pixmap = 0;
     attrs.border_pixel = 0;
     attrs.bit_gravity = 0;
     attrs.win_gravity = 0;
     attrs.backing_store = 0;
-    attrs.pad0 = 0;
     attrs.backing_planes = 0;
     attrs.backing_pixel = 0;
     attrs.save_under = 0;
-    attrs.pad1 = 0;
     attrs.event_mask = KeyPressMask | ExposureMask | StructureNotifyMask;
     attrs.do_not_propagate_mask = 0;
     attrs.override_redirect = 0;
-    attrs.pad2 = 0;
-    attrs.screen = (void *)0;
+    attrs.colormap = cmap;
+    attrs.cursor = 0;
 
     Window win = XCreateWindow(dpy, root, 0, 0, WIN_W, WIN_H, 0, depth,
-                               InputOutput, (void *)visual_id,
+                               InputOutput, visual,
                                CWColormap | CWBorderPixel | CWEventMask, &attrs);
     if (!win) {
         kputs("x11: window creation failed\n");
