@@ -8,7 +8,7 @@ A framework for creating 64 KiB intros. The final packed executable must be no l
 
 1. **Do not use libc or CRT code directly.** Compile with `-ffreestanding` and link with `-nostdlib`. Dynamic dependencies such as libX11 and libGL may load libc transitively at runtime, but project code must not call libc symbols such as `printf`, `malloc`, or `strlen`. The entry point is `_start` in `src/asm/entry.asm`; it calls `int intro_main(int argv, char *argvc)` and exits via `SYS_exit` with the return value.
 2. **Size is the primary metric.** Measure each MinSizeRel artifact with `stat -c%s`. The GNU linker-script baseline is currently 5,568 bytes before packing. Estimate the byte cost before adding code, then measure it afterward.
-3. **Do not include system-library headers** (except `<stddef.h>`). Define only the required opaque types and manual `extern` prototypes; see `src/c/intro_main.c`.
+3. **Do not include system-library headers** (except `<stddef.h>`). Use the project-owned Xlib/GL declarations in `include/` and manual `extern` prototypes.
 4. **Do not modify `link.ld` without understanding the consequences.** See “Linker Pitfalls” below.
 
 ## Build and Verification

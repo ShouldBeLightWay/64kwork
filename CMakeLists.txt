@@ -27,8 +27,12 @@ set(INTRO_COMMON_COMPILE_OPTIONS
     -Wall -Wextra
 )
 
-add_library(intro_main OBJECT src/c/intro_main.c)
+add_library(intro_main OBJECT
+    src/c/intro_main.c
+    src/c/minicrt/syscall.c
+)
 target_compile_options(intro_main PRIVATE ${INTRO_COMMON_COMPILE_OPTIONS})
+target_include_directories(intro_main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set_target_properties(intro_main PROPERTIES POSITION_INDEPENDENT_CODE OFF)
 
 function(add_intro_target target entry_source)
@@ -59,7 +63,7 @@ find_program(UPX_EXECUTABLE NAMES upx)
 if(UPX_EXECUTABLE)
     set(UPX_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/std_upx.upx")
     add_custom_command(OUTPUT "${UPX_OUTPUT}"
-        COMMAND ${UPX_EXECUTABLE} --best --lzma
+        COMMAND ${UPX_EXECUTABLE} --best --lzma --force-overwrite
             --output=${UPX_OUTPUT}
             $<TARGET_FILE:std_upx_elf>
         DEPENDS std_upx_elf $<TARGET_FILE:std_upx_elf>
@@ -89,13 +93,14 @@ if(Python3_Interpreter_FOUND AND SMOL_NASM_EXECUTABLE
     set(SMOL_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/smol/intro.smol")
     set(SMOL_WORK_DIR "${CMAKE_CURRENT_BINARY_DIR}/smol")
     set(SMOL_LINKED_OUTPUT "${SMOL_WORK_DIR}/intro-linked")
-    set(SMOL_MAIN_OBJECT "${SMOL_WORK_DIR}/intro_main.o")
+    set(SMOL_MAIN_OBJECT "${SMOL_WORK_DIR}/intro_main.c.o")
+    set(SMOL_SYSCALL_OBJECT "${SMOL_WORK_DIR}/syscall.c.o")
     set(SMOL_ENTRY_OBJECT "${SMOL_WORK_DIR}/entry_smol.o")
 
     add_custom_command(OUTPUT "${SMOL_OUTPUT}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${SMOL_WORK_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_OBJECTS:intro_main> "${SMOL_MAIN_OBJECT}"
+            $<TARGET_OBJECTS:intro_main> "${SMOL_WORK_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy
             $<TARGET_OBJECTS:smol_entry> "${SMOL_ENTRY_OBJECT}"
         COMMAND ${Python3_EXECUTABLE} "${SMOL_ROOT}/smold.py"
@@ -111,6 +116,7 @@ if(Python3_Interpreter_FOUND AND SMOL_NASM_EXECUTABLE
             -fskip-zero-value
             -fuse-dt-debug
             "${SMOL_MAIN_OBJECT}"
+            "${SMOL_SYSCALL_OBJECT}"
             "${SMOL_ENTRY_OBJECT}"
             "${SMOL_LINKED_OUTPUT}"
         COMMAND ${Python3_EXECUTABLE} "${SMOL_ROOT}/smoltrunc.py"
@@ -118,6 +124,7 @@ if(Python3_Interpreter_FOUND AND SMOL_NASM_EXECUTABLE
         COMMAND chmod +x "${SMOL_OUTPUT}"
         DEPENDS intro_main smol_entry ${SMOL_TOOL_FILES}
         COMMENT "Linking executable with smol"
+        COMMAND_EXPAND_LISTS
         VERBATIM
     )
     add_custom_target(smol DEPENDS "${SMOL_OUTPUT}")

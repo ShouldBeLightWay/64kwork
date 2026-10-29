@@ -17,10 +17,10 @@ _start (src/asm/entry.asm)                             <- sole entry point
         Linux kernel (syscalls) + ld.so (dynamic imports)
 ```
 
-- `entry.asm` is the only assembly startup file. It zeroes `rdi`/`rsi` (the arguments to `intro_main`), calls the function, then passes its return value to `SYS_exit`.
+- `entry.asm` is the standard GNU ELF startup file. It zeroes `rdi`/`rsi` (the arguments to `intro_main`), calls the function, then passes its return value to `SYS_exit`; `entry_smol.asm` adapts the entry for smol's runtime resolver.
 - `intro_main.c` currently handles the platform: `XOpenDisplay` -> `glXChooseFBConfig` -> `XCreateWindow` (1024x640) -> `glXCreateContextAttribsARB` (GL 4.1 core) -> `XPending`/`XNextEvent` loop, rendering, `glXSwapBuffers`, and an approximately 16 ms `nanosleep`.
-- X/GL types are locally defined opaque types or ABI-compatible structures; external functions have manual `extern` prototypes. The only include is `<stddef.h>`.
-- `sys_write` and `nanosleep` use inline-assembly Linux syscalls (`rax=1` and `rax=35`, respectively).
+- X/GL types and external prototypes are declared in the project-owned `include/xlibfwd.h` and `include/glfwd.h`; no system-library headers are included.
+- `src/c/minicrt/syscall.c` implements `sys_write` and `sys_sleep_ms` using inline-assembly Linux syscalls (`rax=1` and `rax=35`, respectively); declarations are in `include/minicrt/syscall.h`.
 
 ## Event Model
 
