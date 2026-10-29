@@ -5,12 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch",
+            "name": "GNU ld (link.ld)",
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceRoot}/build/intro",
+            "program": "${workspaceFolder}/build/gnu_ld_script",
             "args": [],
-            "cwd": "${workspaceRoot}"
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build gnu_ld_script"
+        },
+        {
+            "name": "smol",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/smol/intro.smol",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build smol"
+        },
+        {
+            "name": "std_upx (unpacked ELF)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/std_upx_elf",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "Build std_upx ELF"
         }
     ]
 }

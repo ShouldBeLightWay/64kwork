@@ -13,7 +13,8 @@ Phase metric: reduced the baseline from 15,088 to 5,568 bytes without losing fun
 
 Choose between a STATIC library and an OBJECT library based on tests and size measurements. An object library may avoid archive overhead during linking.
 
-- [ ] Move syscall wrappers from `intro_main.c` into `src/c/minicrt/` (`sys_write`, `sys_read`, `nanosleep`, `mmap`, etc.).
+- [x] Move the existing syscall wrappers into `src/c/minicrt/` (`sys_write`, `sys_sleep_ms`).
+- [ ] Extend the minicrt syscall layer as needed (`sys_read`, `nanosleep`, `mmap`, etc.).
 - [ ] Add minimal project-named string/memory functions (`strlen`, `memcpy`, `memset`) and a small allocator, or use an `mmap`/`brk` arena if the intro's needs favor it.
 - [ ] Add a small number-to-string formatter for debug output; later remove debug output from release builds to save `.rodata` space.
 - [ ] Compare dynamic X11/GL imports through `ld.so` with a custom resolver using `link_map`/`DT_*` tables. Measure whether avoiding `ld.so` or reducing PLT/relocation overhead (estimated at about 1.2 KiB) is worthwhile; retain the dynamic loader otherwise. Use the same scene in both variants.
