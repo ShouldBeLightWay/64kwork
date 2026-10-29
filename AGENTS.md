@@ -7,27 +7,32 @@ A framework for creating 64 KiB intros. The final packed executable must be no l
 ## Non-Negotiable Rules
 
 1. **Do not use libc or CRT code directly.** Compile with `-ffreestanding` and link with `-nostdlib`. Dynamic dependencies such as libX11 and libGL may load libc transitively at runtime, but project code must not call libc symbols such as `printf`, `malloc`, or `strlen`. The entry point is `_start` in `src/asm/entry.asm`; it calls `int intro_main(int argv, char *argvc)` and exits via `SYS_exit` with the return value.
-2. **Size is the primary metric.** Measure the MinSizeRel executable with `stat -c%s build-minsz/intro`. The current baseline is 5,568 bytes before packing. Estimate the byte cost before adding code, then measure it afterward.
+2. **Size is the primary metric.** Measure each MinSizeRel artifact with `stat -c%s`. The GNU linker-script baseline is currently 5,568 bytes before packing. Estimate the byte cost before adding code, then measure it afterward.
 3. **Do not include system-library headers** (except `<stddef.h>`). Define only the required opaque types and manual `extern` prototypes; see `src/c/intro_main.c`.
 4. **Do not modify `link.ld` without understanding the consequences.** See “Linker Pitfalls” below.
 
 ## Build and Verification
 
 ```sh
-cmake -S . -B build-minsz -DCMAKE_BUILD_TYPE=MinSizeRel && cmake --build build-minsz
-stat -c%s build-minsz/intro                      # executable size
-readelf -SW build-minsz/intro                    # sections and padding
-readelf -lW build-minsz/intro                    # program headers and LOAD layout
+cmake -S . -B build-minsz -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build build-minsz --target gnu_ld_script std_upx smol
+stat -c%s build-minsz/gnu_ld_script              # linker-script baseline size
+stat -c%s build-minsz/std_upx.upx                # packed standard ELF size
+stat -c%s build-minsz/smol/intro.smol            # smol output size
+readelf -SW build-minsz/gnu_ld_script            # sections and padding
+readelf -lW build-minsz/gnu_ld_script            # program headers and LOAD layout
 ```
 
 Manual runtime checks require an X11 display (including XWayland, if applicable) and a valid `DISPLAY`:
 
 ```sh
-./build-minsz/intro                              # opens a 1024x640 window with an animated background
+./build-minsz/gnu_ld_script                      # opens a 1024x640 window with an animated background
 xdotool search --name "64kwork intro"            # get the window ID
 xdotool windowactivate --sync <id> key Escape    # exits with code 0
 xdotool windowclose <id>                         # also exits with code 0
 ```
+
+The other runtime outputs are `build-minsz/std_upx_elf` and `build-minsz/smol/intro.smol`.
 
 Bound process lifetime in automated checks (for example, with `timeout`); do not wait indefinitely. The expected exit code on a normal close is 0.
 
